@@ -1,0 +1,8 @@
+prefix=/home/varungiridhar/catkin_ws/install
+
+Name: perception_assignment_1
+Description: Description of perception_assignment_1
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 
