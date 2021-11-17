@@ -14,6 +14,7 @@ from scipy.ndimage import filters
 from torchvision.models import detection
 from imutils.video import VideoStream
 from imutils.video import FPS
+from std_msgs.msg import String
 import numpy as np
 import argparse
 import imutils
@@ -30,34 +31,22 @@ from sensor_msgs.msg import CompressedImage
 # from cv_bridge import CvBridge, CvBridgeError
 
 VERBOSE=False
-# construct the argument parser and parse the arguments
-"""
+frame_id = 0
+unique_id = 0
+allObjects = []
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+#adding the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-m", "--model", type=str, default="frcnn-resnet",
 	choices=["frcnn-resnet", "frcnn-mobilenet", "retinanet"],
 	help="name of the object detection model")
-ap.add_argument("-l", "--labels", type=str, default="coco_classes.pickle",
-	help="path to file containing list of categories in COCO dataset")
 ap.add_argument("-c", "--confidence", type=float, default=0.5,
 	help="minimum probability to filter weak detections")
 args = vars(ap.parse_args())
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# initialize a dictionary containing model name and its corresponding 
-# torchvision function call
-CLASSES = pickle.loads(open(args["labels"], "rb").read())
-COLORS = np.random.uniform(0, 255, size=(len(CLASSES), 3))
-MODELS = {
-	"frcnn-resnet": detection.fasterrcnn_resnet50_fpn,
-	"frcnn-mobilenet": detection.fasterrcnn_mobilenet_v3_large_320_fpn,
-	"retinanet": detection.retinanet_resnet50_fpn
-}
 
-
-# load the model and set it to evaluation mode
-model = MODELS[args["model"]](pretrained=True, progress=True,
-	num_classes=len(CLASSES), pretrained_backbone=True).to(DEVICE)
-model.eval()
-COCO_INSTANCE_CATEGORY_NAMES = [
+CLASSES = [
     '__background__', 'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
     'train', 'truck', 'boat', 'traffic light', 'fire hydrant', 'N/A', 'stop sign',
     'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
@@ -71,8 +60,20 @@ COCO_INSTANCE_CATEGORY_NAMES = [
     'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'N/A', 'book',
     'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
 ]
-"""
+COLORS = np.random.uniform(0, 255, size=(len(CLASSES), 3))
+MODELS = {
+	"frcnn-resnet": detection.fasterrcnn_resnet50_fpn,
+	"frcnn-mobilenet": detection.fasterrcnn_mobilenet_v3_large_320_fpn,
+	"retinanet": detection.retinanet_resnet50_fpn
+}
 
+class obj:
+
+    def __init__(self, setID, setType, setCenterX, setCenterY):
+        self.id = setID
+        self.type = setClass
+        self.centerX = setCenterX
+        self.centerY = setCenterY
 
 class image_feature:
   
@@ -80,7 +81,7 @@ class image_feature:
         '''Initialize ros publisher, ros subscriber'''
         # topic where we publish
         self.image_pub = rospy.Publisher("/output/image_raw/compressed",
-            CompressedImage, queue_size = 1)
+            String, queue_size = 1)
         # self.bridge = CvBridge()
 
         # subscribed Topic
@@ -91,6 +92,15 @@ class image_feature:
 
 
     def callback(self, ros_data):
+        global frame_id
+        global allObjects_class
+        global unique_id
+        ###object_detection
+        # load the model and set it to evaluation mode
+        model = MODELS[args["model"]](pretrained=True, progress=True,
+	num_classes=len(CLASSES), pretrained_backbone=True).to(DEVICE)
+        model.eval()
+
         '''Callback function of subscribed topic. 
         Here images get converted and features detected'''
         if VERBOSE :
@@ -100,7 +110,8 @@ class image_feature:
         np_arr = np.fromstring(ros_data.data, np.uint8)
         #image_np = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_COLOR)
         image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR) # OpenCV >= 3.0:		
-        """image_np = imutils.resize(image_np, width=400)
+        image_np = imutils.resize(image_np, width=400)
+        orig = image_np.copy()
         image_np = cv2.cvtColor(image_np, cv2.COLOR_BGR2RGB)
         image_np = image_np.transpose((2, 0, 1))
 
@@ -110,41 +121,85 @@ class image_feature:
 	# send the input to the device and pass the it through the
 	# network to get the detections and predictions
         image_np = image_np.to(DEVICE)
-        detections = model(image_np)[0]"""
-
-        #### Feature detectors using CV2 #### 
-        # "","Grid","Pyramid" + 
-        # "FAST","GFTT","HARRIS","MSER","ORB","SIFT","STAR","SURF"
-        method = "GridFAST"
-        feat_det = cv2.ORB_create()
+        detections = model(image_np)[0]
         time1 = time.time()
 
-        # convert np image to grayscale
-        featPoints = feat_det.detect(
-            cv2.cvtColor(image_np, cv2.COLOR_BGR2GRAY))
-        time2 = time.time()
-        if VERBOSE :
-            print('%s detector found: %s points in: %s sec.'%(method,
-                len(featPoints),time2-time1))
+        frame_id += 1
 
-        for featpoint in featPoints:
-            x,y = featpoint.pt
-            cv2.circle(image_np,(int(x),int(y)), 3, (0,0,255), -1)
-        
-        cv2.imshow('cv_img', image_np)
-        cv2.waitKey(2)
-	
+	# loop over the detections
+        objectsInScene = []
+        for i in range(0, len(detections["boxes"])):
+		# extract the confidence (i.e., probability) associated with
+		# the prediction
+                confidence = detections["scores"][i]
+		# filter out weak detections by ensuring the confidence is
+		# greater than the minimum confidence
+                if confidence > args["confidence"]:
+			# extract the index of the class label from the
+			# detections, then compute the (x, y)-coordinates of
+			# the bounding box for the object
+                        idx = int(detections["labels"][i])
+                        box = detections["boxes"][i].detach().cpu().numpy()
+
+                        (startX, startY, endX, endY) = box.astype("int")
+                        centerX = (endX + startX)/2
+                        centerY = (endY + startY)/2
+                        cv2.circle(orig,(int(centerX),int(centerY)), 3, (0,0,255), -1)
+
+			# draw the bounding box and label on the frame
+                        label = "{}, {}, {}, {}".format(frame_id, CLASSES[idx], centerX, centerY)
+
+                        object_arr = [unique_id, CLASSES[idx], centerX, centerY]
+
+
+                        objectsInScene.append(object_arr)
+                        #coding the Object Categorizer
+                       
+                        cv2.rectangle(orig, (startX, startY), (endX, endY),
+				COLORS[idx], 2)
+
+
+
+
+                        y = startY - 15 if startY - 15 > 15 else startY + 15
+                        cv2.putText(orig, label, (startX, y),
+				cv2.FONT_HERSHEY_SIMPLEX, 0.5, COLORS[idx], 2)
+                        unique_id += 1
+                cv2.imshow('cv_img', orig)
+                cv2.waitKey(2)	
+                
+
+        if frame_id == 1:
+            allObjects.append(objectsInScene)
+        else:
+            self.process_objects(objectsInScene, frame_id)
         #### Create CompressedImage ####
-        msg = CompressedImage()
-        msg.header.stamp = rospy.Time.now()
-        msg.format = "jpeg"
-        msg.data = np.array(cv2.imencode('.jpg', image_np)[0]).tostring()
+                                                                                                         
         # Publish new image
-        self.image_pub.publish(msg)
+        self.image_pub.publish(str(allObjects[0]))
         
-        self.subscriber.unregister()
+        
+        #if frame_id > 5:
+            #self.process()
+    
+    def process_objects(self, frame_next, frame_id):
+        for statInd in range(0, len(allObjects[0]) - 1):
+            for dynInd in range(0, len(frame_next) - 1):
+                if statInd == dynInd:
+                    continue
+                else:
+                    if self.isclose(allObjects[0][statInd][2], frame_next[dynInd][2]) and self.isclose(allObjects[0][statInd][3], frame_next[dynInd][3]):
+                        frame_next.remove(frame_next[dynInd])
+        
+        for i in range(0, len(frame_next)):
+            allObjects[0].append(frame_next[i])
 
+
+    def isclose(self, a, b, rel_tol=1e-09, abs_tol=0.0):
+        return abs(a-b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
+    
 def main(args):
+
     ic = image_feature()
 
     rospy.init_node('image_feature', anonymous=True)

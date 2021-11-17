@@ -1,2 +1,2 @@
-perception_assignment_1:ros_bag_to_video_cpp
+motion_planning:perception_assignment_1:ros_bag_to_video_cpp
 -DCATKIN_DEVEL_PREFIX=/home/varungiridhar/catkin_ws/devel -DCMAKE_INSTALL_PREFIX=/home/varungiridhar/catkin_ws/install -G Unix Makefiles

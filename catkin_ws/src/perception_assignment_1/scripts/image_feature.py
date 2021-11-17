@@ -67,7 +67,13 @@ MODELS = {
 	"retinanet": detection.retinanet_resnet50_fpn
 }
 
+class obj:
 
+    def __init__(self, setID, setType, setCenterX, setCenterY):
+        self.id = setID
+        self.type = setClass
+        self.centerX = setCenterX
+        self.centerY = setCenterY
 
 class image_feature:
   

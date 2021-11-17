@@ -6,4 +6,5 @@
 # testing this directory and lists subdirectories to be tested as well.
 subdirs("gtest")
 subdirs("perception_assignment_1")
+subdirs("motion_planning")
 subdirs("ros_bag_to_video_cpp")

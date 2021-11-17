@@ -1,0 +1,9 @@
+Header header
+int8 objectID 
+int8 laneID
+string objectType
+float32 dx
+float32 dy
+float32 speed
+float32 acc
+float32 distanceFromAV
