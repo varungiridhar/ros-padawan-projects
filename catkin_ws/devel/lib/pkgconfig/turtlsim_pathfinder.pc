@@ -1,8 +1,0 @@
-prefix=/home/varungiridhar/catkin_ws/devel
-
-Name: turtlsim_pathfinder
-Description: Description of turtlsim_pathfinder
-Version: 0.0.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 

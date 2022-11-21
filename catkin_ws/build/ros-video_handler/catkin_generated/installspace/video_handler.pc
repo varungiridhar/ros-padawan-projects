@@ -1,8 +1,0 @@
-prefix=/home/varungiridhar/catkin_ws/install
-
-Name: video_handler
-Description: Description of video_handler
-Version: 0.1.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 

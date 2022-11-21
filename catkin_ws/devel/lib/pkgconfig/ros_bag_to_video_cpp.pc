@@ -1,8 +1,0 @@
-prefix=/home/varungiridhar/catkin_ws/devel
-
-Name: ros_bag_to_video_cpp
-Description: Description of ros_bag_to_video_cpp
-Version: 0.0.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 

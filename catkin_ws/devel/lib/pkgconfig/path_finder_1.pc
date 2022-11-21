@@ -1,8 +1,0 @@
-prefix=/home/varungiridhar/catkin_ws/devel
-
-Name: path_finder_1
-Description: Description of path_finder_1
-Version: 0.0.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 
